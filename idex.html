@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8-Bit Pixelátor Pro</title>
+    <style>
+        /* Definice barevných témat */
+        :root {
+            --pixel-orange: #F26539;
+            --pixel-beige-light: #F5EBD4;
+            --pixel-beige-dark: #EADBC3; 
+            --pixel-black: #15131C;
+            --pixel-green-bg: #2E8B6E;
+            --text-color: var(--pixel-beige-light);
+            --header-color: var(--pixel-orange);
+        }
+
+        /* 2. Grayscale téma */
+        body.theme-grey {
+            --pixel-orange: #FFFFFF;
+            --pixel-beige-light: #DDDDDD;
+            --pixel-beige-dark: #888888; 
+            --pixel-black: #000000;
+            --pixel-green-bg: #444444;
+            --text-color: #FFFFFF;
+            --header-color: #FFFFFF;
+        }
+
+        /* 3. ACC téma (Kontrastní s žlutou místo oranžové) */
+        body.theme-acc {
+            --pixel-orange: #FFFF00;      /* Žlutá místo oranžové #FFFF00;  */
+            --pixel-black: #0055AA;       /* Tmavě modrá jako hlavní pozadí */
+            --pixel-green-bg: #000000;    /* Černá místo zelené */
+            --pixel-beige-light: #FFFFFF; /* Bílá místo béžové */
+            --pixel-beige-dark: #DDDDDD;  /* Světle šedá #DDDDDD */
+            --text-color: #FFFF00;        /* Žlutý text */
+            --header-color: #FFFF00;      /* Žlutý nadpis */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--pixel-black);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        h1 {
+            color: var(--header-color);
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid var(--pixel-green-bg);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .palette-switcher {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .palette-btn {
+            border: 2px solid #fff;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            color: white;
+            transition: transform 0.2s;
+        }
+        .palette-btn:hover { transform: scale(1.05); }
+
+        #btn-p1 { background: linear-gradient(45deg, #F26539, #2E8B6E); }
+        #btn-p2 { background: linear-gradient(45deg, #333, #eee); color: #000; }
+        #btn-p3 { background: #0055AA; color: #FFFF00; border-color: #FFFF00; }
+
+        canvas {
+            border: 4px solid var(--pixel-beige-dark);
+            image-rendering: pixelated; 
+            max-width: 100%;
+            display: none; 
+            margin-bottom: 20px;
+        }
+
+        .btn-download {
+            background-color: var(--pixel-orange);
+            color: #000; /* Tmavý text pro lepší čitelnost na žluté */
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        /* Specifické pro oranžovou v 1. verzi, aby text zůstal bílý */
+        body.theme-default .btn-download { color: white; }
+    </style>
+</head>
+<body class="theme-default">
+
+    <h1>8-Bit Pixelátor</h1>
+    
+    <div class="palette-switcher">
+        <button class="palette-btn" id="btn-p1" onclick="setPalette('default')">Původní</button>
+        <button class="palette-btn" id="btn-p2" onclick="setPalette('grey')">Grayscale</button>
+        <button class="palette-btn" id="btn-p3" onclick="setPalette('acc')">ACC Žlutá</button>
+    </div>
+
+    <div class="controls">
+        <input type="file" id="upload" accept="image/*">
+        
+        <div>
+            <label for="pixelSize">Velikost pixelů:</label>
+            <input type="range" id="pixelSize" min="4" max="50" value="12">
+            <span id="pixelVal">12</span>
+        </div>
+
+        <button class="btn-download" onclick="downloadImage()">Stáhnout obrázek</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // Definice palet pro algoritmus (RGB)
+        const palettes = {
+            'default': [
+                {r: 242, g: 101, b: 57},  // oranžová (#F26539)
+                {r: 245, g: 235, b: 212}, // beige-light
+                {r: 234, g: 219, b: 195}, // beige-dark
+                {r: 21,  g: 19,  b: 28},  // černá
+                {r: 46,  g: 139, b: 110}  // zelená
+            ],
+            'grey': [
+                {r: 255, g: 255, b: 255}, 
+                {r: 200, g: 200, b: 200}, 
+                {r: 120, g: 120, b: 120}, 
+                {r: 60,  g: 60,  b: 60},  
+                {r: 0,   g: 0,   b: 0}    
+            ],
+            'acc': [
+                {r: 255, g: 255, b: 0},   // ŽLUTÁ (místo oranžové) {r: 255, g: 255, b: 0},   // ŽLUTÁ (místo oranžové)
+                {r: 0,   g: 85,  b: 170}, // Tmavě modrá
+                {r: 0,   g: 0,   b: 0},   // Černá
+                {r: 255, g: 255, b: 0}, // Bílá
+                {r: 221, g: 221, b: 221}  // Šedobílá {r: 221, g: 221, b: 221}  // Šedobílá 
+            ]
+        };
+
+        let currentPaletteKey = 'default';
+        let originalImage = null;
+
+        const upload = document.getElementById('upload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const pixelSizeInput = document.getElementById('pixelSize');
+        const pixelValSpan = document.getElementById('pixelVal');
+
+        function setPalette(key) {
+            currentPaletteKey = key;
+            document.body.className = ''; 
+            document.body.classList.add('theme-' + key);
+            if (originalImage) processImage();
+        }
+
+        upload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImage = img;
+                    processImage();
+                    canvas.style.display = 'block';
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        pixelSizeInput.addEventListener('input', (e) => {
+            pixelValSpan.textContent = e.target.value;
+            if (originalImage) processImage();
+        });
+
+        function processImage() {
+            const pixelSize = parseInt(pixelSizeInput.value);
+            const w = originalImage.width;
+            const h = originalImage.height;
+
+            const smallW = Math.max(1, Math.floor(w / pixelSize));
+            const smallH = Math.max(1, Math.floor(h / pixelSize));
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = smallW;
+            tempCanvas.height = smallH;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(originalImage, 0, 0, smallW, smallH);
+
+            const imageData = tempCtx.getImageData(0, 0, smallW, smallH);
+            const data = imageData.data;
+
+            const activePalette = palettes[currentPaletteKey];
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                const closest = findClosestColor(r, g, b, activePalette);
+
+                data[i] = closest.r;
+                data[i + 1] = closest.g;
+                data[i + 2] = closest.b;
+            }
+
+            tempCtx.putImageData(imageData, 0, 0);
+            canvas.width = w;
+            canvas.height = h;
+            ctx.imageSmoothingEnabled = false; 
+            ctx.drawImage(tempCanvas, 0, 0, smallW, smallH, 0, 0, w, h);
+        }
+
+        function findClosestColor(r, g, b, palette) {
+            let minDistance = Infinity;
+            let closest = palette[0];
+
+            for (const color of palette) {
+                const dist = Math.sqrt(
+                    Math.pow(r - color.r, 2) +
+                    Math.pow(g - color.g, 2) +
+                    Math.pow(b - color.b, 2)
+                );
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closest = color;
+                }
+            }
+            return closest;
+        }
+
+        function downloadImage() {
+            if (!originalImage) return alert("Nejdřív nahraj obrázek!");
+            const link = document.createElement('a');
+            link.download = `8bit-${currentPaletteKey}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+    </script>
+</body>
+</html>
